@@ -27,6 +27,17 @@
             just
             cargo-watch
             cargo-release
+
+            wayland
+            libGL
+            libxkbcommon
+
+            vulkan-loader
+
+            xorg.libXcursor
+            xorg.libXrandr
+            xorg.libXi
+            xorg.libX11
           ];
           env = {
             ZSTD_SYS_USE_PKG_CONFIG = true;
