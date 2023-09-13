@@ -65,6 +65,10 @@ impl Core {
         self.state.set_pixels_per_point(scale_factor);
     }
 
+    pub fn handle_window_event(&mut self, event: &WindowEvent) -> bool {
+        self.state.on_event(self.ui.context(), event).repaint
+    }
+
     pub fn render(&mut self, window: &Window) -> Result<(), wgpu::SurfaceError> {
         let ui_state = UiState {
             is_paused: false,

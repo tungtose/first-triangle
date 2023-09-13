@@ -30,12 +30,12 @@ impl App {
         let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
 
         let window = WindowBuilder::new()
-            .with_min_inner_size(Size::Logical(LogicalSize::new(720.0, 360.0)))
-            .with_inner_size(RECOMMAND_SIZE)
+            // .with_min_inner_size(Size::Logical(LogicalSize::new(720.0, 360.0)))
+            // .with_inner_size(RECOMMAND_SIZE)
             // .with_title(format_title(&None))
             .build(&event_loop)?;
 
-        try_resize_window(&window);
+        // try_resize_window(&window);
 
         let inner_size = window.inner_size();
 
@@ -83,6 +83,8 @@ impl App {
                     ref event,
                     window_id,
                 } if window_id == self.window.id() => {
+                    self.core.handle_window_event(event);
+
                     if !self.core.renderer.input(event) {
                         match event {
                             WindowEvent::CloseRequested => {
@@ -91,20 +93,30 @@ impl App {
                                 }
                             }
                             WindowEvent::CursorMoved { position, .. } => {
-                                // if window_id == self.window.id() {
-                                //     self.core
-                                //         .update_cursor(position.x as f32, position.y as f32)
-                                // }
+                                if window_id == self.window.id() {
+                                    // self.core
+                                    //     .update_cursor(position.x as f32, position.y as f32)
+                                }
                             }
                             WindowEvent::MouseInput { button, state, .. } => {
-                                // if window_id == self.window.id() {
-                                //     match button {
-                                //         MouseButton::Left => self
-                                //             .core
-                                //             .handle_mouse_input(*state == ElementState::Pressed),
-                                //         _ => {}
-                                //     }
-                                // }
+                                if window_id == self.window.id() {
+                                    if *state == ElementState::Released {
+                                        let _ = self
+                                            .window
+                                            .set_cursor_grab(winit::window::CursorGrabMode::None);
+                                    } else if *state == ElementState::Pressed {
+                                        println!("CLICK!!!");
+                                        let _ = self
+                                            .window
+                                            .set_cursor_grab(winit::window::CursorGrabMode::Locked);
+                                    }
+                                    // match button {
+                                    //     MouseButton::Left => self
+                                    //         .core
+                                    //         .handle_mouse_input(*state == ElementState::Pressed),
+                                    //     _ => {}
+                                    // }
+                                }
                             }
                             WindowEvent::Resized(physical_size) => {
                                 if window_id == self.window.id() {
