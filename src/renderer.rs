@@ -409,12 +409,11 @@ impl Renderer {
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
-            // render_pass.draw(0..self.num_vertices, 0..1);
         }
 
-        for delta in &egui_textures_delta.set {
+        for (id, delta) in &egui_textures_delta.set {
             self.egui_renderer
-                .update_texture(&self.device, &self.queue, delta.0, &delta.1);
+                .update_texture(&self.device, &self.queue, *id, delta);
         }
 
         self.egui_renderer.update_buffers(
@@ -446,11 +445,11 @@ impl Renderer {
             );
         }
 
+        self.queue.submit(std::iter::once(encoder.finish()));
+
         for delta in &egui_textures_delta.free {
             self.egui_renderer.free_texture(delta);
         }
-
-        self.queue.submit(std::iter::once(encoder.finish()));
 
         output.present();
 
