@@ -1,5 +1,5 @@
 use crate::{
-    event::{AppResponse, AppStatus, EventProxyWinit, UserEvent},
+    event::{AppStatus, EventProxyWinit, UserEvent},
     renderer::Renderer,
     ui::{UiState, UI},
 };
@@ -8,12 +8,8 @@ use egui::ClippedPrimitive;
 use egui_wgpu::renderer::ScreenDescriptor;
 use egui_winit::State;
 
-use anyhow::{bail, Ok, Result};
-use winit::{
-    event::WindowEvent,
-    event_loop::EventLoop,
-    window::{Window, WindowBuilder},
-};
+use anyhow::{Ok, Result};
+use winit::{event::WindowEvent, event_loop::EventLoop, window::Window};
 
 pub struct Core {
     cursor: [f32; 2],
@@ -22,7 +18,6 @@ pub struct Core {
     status: AppStatus,
     width: f32,
     height: f32,
-    // egui_renderer: egui_wgpu::renderer::Renderer,
     ui: UI,
     pub renderer: Renderer,
 }
