@@ -94,28 +94,26 @@ impl App {
                             }
                             WindowEvent::CursorMoved { position, .. } => {
                                 if window_id == self.window.id() {
-                                    // self.core
-                                    //     .update_cursor(position.x as f32, position.y as f32)
+                                    self.core
+                                        .update_cursor(position.x as f32, position.y as f32)
                                 }
                             }
                             WindowEvent::MouseInput { button, state, .. } => {
                                 if window_id == self.window.id() {
-                                    if *state == ElementState::Released {
-                                        let _ = self
-                                            .window
-                                            .set_cursor_grab(winit::window::CursorGrabMode::None);
-                                    } else if *state == ElementState::Pressed {
-                                        println!("CLICK!!!");
-                                        let _ = self
-                                            .window
-                                            .set_cursor_grab(winit::window::CursorGrabMode::Locked);
-                                    }
-                                    // match button {
-                                    //     MouseButton::Left => self
-                                    //         .core
-                                    //         .handle_mouse_input(*state == ElementState::Pressed),
-                                    //     _ => {}
+                                    // if *state == ElementState::Released {
+                                    //     let _ = self
+                                    //         .window
+                                    //         .set_cursor_grab(winit::window::CursorGrabMode::None);
+                                    // } else if *state == ElementState::Pressed {
+                                    //     println!("CLICK!!!");
+                                    //     let _ = self
+                                    //         .window
+                                    //         .set_cursor_grab(winit::window::CursorGrabMode::Locked);
                                     // }
+                                    if let MouseButton::Left = button {
+                                        self.core
+                                            .handle_mouse_input(*state == ElementState::Pressed)
+                                    }
                                 }
                             }
                             WindowEvent::Resized(physical_size) => {

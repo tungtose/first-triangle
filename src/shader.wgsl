@@ -2,6 +2,14 @@ struct CameraUniform {
   view_proj: mat4x4<f32>,
 };
 
+struct PointUniform {
+  point: vec2<f32>
+}
+
+@group(2) @binding(0)
+var<uniform> point: PointUniform;
+
+
 @group(1) @binding(0)
 var<uniform> camera: CameraUniform;
 

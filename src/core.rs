@@ -4,6 +4,7 @@ use crate::{
     ui::{UiState, UI},
 };
 
+use cgmath::Vector2;
 use egui::ClippedPrimitive;
 use egui_wgpu::renderer::ScreenDescriptor;
 use egui_winit::State;
@@ -12,7 +13,7 @@ use anyhow::{Ok, Result};
 use winit::{event::WindowEvent, event_loop::EventLoop, window::Window};
 
 pub struct Core {
-    cursor: [f32; 2],
+    cursor: Vector2<f32>,
     event_proxy: EventProxyWinit<UserEvent>,
     state: State,
     status: AppStatus,
@@ -43,7 +44,7 @@ impl Core {
         let event_proxy = EventProxyWinit::from_proxy(event_proxy);
 
         Ok(Self {
-            cursor: Default::default(),
+            cursor: Vector2::new(0., 0.),
             renderer,
             state,
             width,
@@ -64,7 +65,21 @@ impl Core {
         self.state.on_event(self.ui.context(), event).repaint
     }
 
+    pub fn update_cursor(&mut self, x: f32, y: f32) {
+        self.cursor.x = x;
+        self.cursor.y = y;
+    }
+
+    pub fn handle_mouse_input(&mut self, pressed: bool) {
+        if pressed {
+            println!("point: {:?}", self.cursor);
+            self.renderer.set_point_uniform(self.cursor);
+        }
+    }
+
     pub fn render(&mut self, window: &Window) -> Result<(), wgpu::SurfaceError> {
+        // println!("Cursor: {:?}", self.cursor);
+
         let ui_state = UiState {
             is_paused: false,
             status: self.status.clone(),

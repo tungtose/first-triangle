@@ -1,4 +1,5 @@
 use cgmath::prelude::*;
+use cgmath::Vector2;
 use cgmath::Vector3;
 use egui::{ClippedPrimitive, TexturesDelta};
 use egui_wgpu::renderer::ScreenDescriptor;
@@ -117,6 +118,17 @@ impl InstanceRaw {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
+pub struct PointUniform {
+    point: [f32; 3],
+}
+
+//
+pub struct Point {
+    point: Vector2<f32>,
+}
+
 pub struct Renderer {
     #[allow(dead_code)]
     instance: wgpu::Instance,
@@ -143,6 +155,11 @@ pub struct Renderer {
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+
+    point: Point,
+    point_uniform: PointUniform,
+    point_buffer: wgpu::Buffer,
+    point_bind_group: wgpu::BindGroup,
 
     camera_controller: CameraController,
 
@@ -292,6 +309,44 @@ impl Renderer {
 
         let camera_controller = CameraController::new(0.2);
 
+        let point = Point {
+            point: Vector2::new(0.0, 0.0),
+        };
+
+        let point_uniform = PointUniform {
+            point: [0.0, 0.0, 0.0],
+        };
+
+        let point_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Point Buffer"),
+            contents: bytemuck::cast_slice(&[point_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let point_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("point bind group layout"),
+            });
+
+        let point_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &point_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: point_buffer.as_entire_binding(),
+            }],
+            label: Some("point bind group"),
+        });
+
         let clear_color = wgpu::Color::BLACK;
 
         let instances = (0..NUM_INSTANCES_PER_ROW)
@@ -332,7 +387,11 @@ impl Renderer {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
+                bind_group_layouts: &[
+                    &texture_bind_group_layout,
+                    &camera_bind_group_layout,
+                    &point_bind_group_layout,
+                ],
                 push_constant_ranges: &[],
             });
 
@@ -413,38 +472,24 @@ impl Renderer {
             egui_renderer,
             instances,
             instance_buffer,
+            point_bind_group,
+            point,
+            point_buffer,
+            point_uniform,
         }
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
         self.camera_controller.process_events(event);
 
-        match event {
-            WindowEvent::CursorMoved { position, .. } => {
-                // println!("Mouse pos -  x: {}, y: {}", position.x, position.y);
-                self.clear_color = wgpu::Color {
-                    r: position.x as f64 / self.size.width as f64,
-                    g: position.y as f64 / self.size.height as f64,
-                    b: 1.0,
-                    a: 1.0,
-                };
-                true
-            }
-            _ => false,
-        }
+        false
     }
 
-    pub fn device(&self) -> &wgpu::Device {
-        &self.device
+    pub fn set_point_uniform(&mut self, point: Vector2<f32>) {
+        self.point_uniform.point[0] = point.x;
+        self.point_uniform.point[1] = point.y;
+        self.point_uniform.point[2] = 0.0;
     }
-
-    pub fn format(&self) -> wgpu::TextureFormat {
-        self.config.format
-    }
-
-    // pub fn window(&self) -> &Window {
-    //     &self.window
-    // }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
@@ -459,6 +504,12 @@ impl Renderer {
     pub fn update(&mut self) {
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
+        println!("xxx: {:?}", self.point_uniform);
+        self.queue.write_buffer(
+            &self.point_buffer,
+            0,
+            bytemuck::cast_slice(&[self.point_uniform]),
+        );
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
@@ -501,6 +552,7 @@ impl Renderer {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.point_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
