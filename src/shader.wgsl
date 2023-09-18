@@ -6,9 +6,6 @@ struct PointUniform {
   point: vec2<f32>
 }
 
-@group(2) @binding(0)
-var<uniform> point: PointUniform;
-
 
 @group(1) @binding(0)
 var<uniform> camera: CameraUniform;
