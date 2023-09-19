@@ -143,7 +143,7 @@ pub fn create_render_pipeline(
             })],
         }),
         primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
+            topology: wgpu::PrimitiveTopology::PointList,
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
             cull_mode: Some(wgpu::Face::Back),
@@ -408,9 +408,6 @@ impl Renderer {
             },
             PointVertex {
                 position: [0.5, -0.5, 0.],
-            },
-            PointVertex {
-                position: [205., -211.0, 0.],
             },
         ]
         .to_vec();

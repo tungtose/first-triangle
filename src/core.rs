@@ -43,6 +43,8 @@ impl Core {
         let event_proxy = event_loop.create_proxy();
         let event_proxy = EventProxyWinit::from_proxy(event_proxy);
 
+        // println!("w: {}, h: {}", width, height);
+
         Ok(Self {
             cursor: Vector2::new(0., 0.),
             renderer,
@@ -66,8 +68,8 @@ impl Core {
     }
 
     pub fn update_cursor(&mut self, x: f32, y: f32) {
-        self.cursor.x = x;
-        self.cursor.y = y;
+        self.cursor.x = (x * 2.0) / self.width - 1.0;
+        self.cursor.y = 1.0 - (y * 2.0) / self.height;
     }
 
     pub fn handle_mouse_input(&mut self, pressed: bool) {
