@@ -1,13 +1,43 @@
 use std::ops::Range;
 
 use crate::texture;
+use bytemuck::{Pod, Zeroable};
 
 pub trait Vertex {
     fn desc() -> wgpu::VertexBufferLayout<'static>;
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct PointVertex {
+    pub position: [f32; 3],
+    // pub text_coords: [f32; 2],
+}
+
+impl Vertex for PointVertex {
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        use std::mem;
+        wgpu::VertexBufferLayout {
+            array_stride: mem::size_of::<PointVertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 3,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                // wgpu::VertexAttribute {
+                //     offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                //     shader_location: 4,
+                //     format: wgpu::VertexFormat::Float32x2,
+                // },
+            ],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct ModelVertex {
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],

@@ -72,8 +72,8 @@ impl Core {
 
     pub fn handle_mouse_input(&mut self, pressed: bool) {
         if pressed {
+            self.renderer.update_points(self.cursor.x, self.cursor.y);
             println!("point: {:?}", self.cursor);
-            self.renderer.set_point_uniform(self.cursor);
         }
     }
 

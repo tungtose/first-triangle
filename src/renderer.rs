@@ -3,11 +3,14 @@ use cgmath::Vector2;
 use cgmath::Vector3;
 use egui::{ClippedPrimitive, TexturesDelta};
 use egui_wgpu::renderer::ScreenDescriptor;
+use wgpu::include_wgsl;
 use wgpu::util::DeviceExt;
 use winit::{event::WindowEvent, window::Window};
 
 use bytemuck::{Pod, Zeroable};
 
+use crate::model;
+use crate::model::PointVertex;
 use crate::model::{DrawModel, Vertex};
 use crate::{
     camera::{Camera, CameraController, CameraUniform},
@@ -16,12 +19,7 @@ use crate::{
 
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
-const NUM_INSTANCES_PER_ROW: u32 = 3;
-const INSTANCE_DISPLACEMENT: Vector3<f32> = cgmath::Vector3::new(
-    NUM_INSTANCES_PER_ROW as f32 * 0.5,
-    0.0,
-    NUM_INSTANCES_PER_ROW as f32 * 0.5,
-);
+const NUM_INSTANCES_PER_ROW: u32 = 5;
 
 pub struct Instance {
     position: cgmath::Vector3<f32>,
@@ -76,17 +74,6 @@ impl InstanceRaw {
     }
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Pod, Zeroable)]
-pub struct PointUniform {
-    point: [f32; 3],
-}
-
-//
-pub struct Point {
-    point: Vector2<f32>,
-}
-
 pub struct Renderer {
     #[allow(dead_code)]
     instance: wgpu::Instance,
@@ -104,7 +91,12 @@ pub struct Renderer {
     diffuse_texture: texture::Texture,
     diffuse_bind_group: wgpu::BindGroup,
 
+    point_render_pipeline: wgpu::RenderPipeline,
+
     depth_texture: texture::Texture,
+
+    vertex_buffer: wgpu::Buffer,
+    points: Vec<PointVertex>,
 
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
@@ -114,15 +106,68 @@ pub struct Renderer {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 
-    point: Point,
-    point_uniform: PointUniform,
-    point_buffer: wgpu::Buffer,
-    point_bind_group: wgpu::BindGroup,
-
     camera_controller: CameraController,
 
     egui_renderer: egui_wgpu::renderer::Renderer,
     obj_model: crate::model::Model,
+}
+
+pub fn create_render_pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    color_format: wgpu::TextureFormat,
+    depth_format: Option<wgpu::TextureFormat>,
+    vertex_layouts: &[wgpu::VertexBufferLayout],
+    shader: wgpu::ShaderModuleDescriptor,
+) -> wgpu::RenderPipeline {
+    let shader = device.create_shader_module(shader);
+
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Render Pipeline"),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: "vs_main",
+            buffers: vertex_layouts,
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: "fs_main",
+            targets: &[Some(wgpu::ColorTargetState {
+                format: color_format,
+                blend: Some(wgpu::BlendState {
+                    alpha: wgpu::BlendComponent::REPLACE,
+                    color: wgpu::BlendComponent::REPLACE,
+                }),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: Some(wgpu::Face::Back),
+            // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+            polygon_mode: wgpu::PolygonMode::Fill,
+            // Requires Features::DEPTH_CLIP_CONTROL
+            unclipped_depth: false,
+            // Requires Features::CONSERVATIVE_RASTERIZATION
+            conservative: false,
+        },
+        depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
+            format,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState {
+            count: 1,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        },
+        multiview: None,
+    })
 }
 
 impl Renderer {
@@ -268,54 +313,16 @@ impl Renderer {
 
         let camera_controller = CameraController::new(0.2);
 
-        let point = Point {
-            point: Vector2::new(0.0, 0.0),
-        };
-
-        let point_uniform = PointUniform {
-            point: [0.0, 0.0, 0.0],
-        };
-
-        let point_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Point Buffer"),
-            contents: bytemuck::cast_slice(&[point_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let point_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("point bind group layout"),
-            });
-
-        let point_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &point_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: point_buffer.as_entire_binding(),
-            }],
-            label: Some("point bind group"),
-        });
-
         let clear_color = wgpu::Color::BLACK;
 
+        const SPACE_BETWEEN: f32 = 3.0;
         let instances = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
                 (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let position = cgmath::Vector3 {
-                        x: x as f32,
-                        y: 0.0,
-                        z: z as f32,
-                    } - INSTANCE_DISPLACEMENT;
+                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+
+                    let position = cgmath::Vector3 { x, y: 0.0, z };
 
                     let rotation = if position.is_zero() {
                         cgmath::Quaternion::from_axis_angle(
@@ -338,64 +345,80 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-        });
-
         let depth_texture =
             texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
                     &texture_bind_group_layout,
                     &camera_bind_group_layout,
-                    // &point_bind_group_layout,
+                    // &light_bind_group_layout,
                 ],
+                label: Some("render_pipeline_layout"),
                 push_constant_ranges: &[],
             });
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &[crate::model::ModelVertex::desc(), InstanceRaw::desc()],
+        let render_pipeline = {
+            let shader = wgpu::ShaderModuleDescriptor {
+                label: Some("Normal Shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            };
+            create_render_pipeline(
+                &device,
+                &render_pipeline_layout,
+                config.format,
+                Some(texture::Texture::DEPTH_FORMAT),
+                &[model::ModelVertex::desc(), InstanceRaw::desc()],
+                shader,
+            )
+        };
+
+        let point_render_pipeline = {
+            let shader = wgpu::ShaderModuleDescriptor {
+                label: Some("Point Shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("point.wgsl").into()),
+            };
+
+            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                bind_group_layouts: &[
+                    // &camera_bind_group_layout,
+                    // &light_bind_group_layout,
+                ],
+                label: Some("point_render_pipeline_layout"),
+                push_constant_ranges: &[],
+            });
+
+            create_render_pipeline(
+                &device,
+                &layout,
+                config.format,
+                Some(texture::Texture::DEPTH_FORMAT),
+                &[model::PointVertex::desc()],
+                shader,
+            )
+        };
+
+        let points = [
+            PointVertex {
+                position: [0., 0.5, 0.],
             },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
+            PointVertex {
+                position: [-0.4, -0.5, 0.],
             },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: texture::Texture::DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
+            PointVertex {
+                position: [0.5, -0.5, 0.],
             },
-            multiview: None,
+            PointVertex {
+                position: [205., -211.0, 0.],
+            },
+        ]
+        .to_vec();
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(points.as_slice()),
+            usage: wgpu::BufferUsages::VERTEX,
         });
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -423,6 +446,7 @@ impl Renderer {
             adapter,
             instance,
             render_pipeline,
+            point_render_pipeline,
             num_indices,
             index_buffer,
             diffuse_bind_group,
@@ -435,12 +459,10 @@ impl Renderer {
             egui_renderer,
             instances,
             instance_buffer,
-            point_bind_group,
-            point,
-            point_buffer,
-            point_uniform,
             depth_texture,
             obj_model,
+            vertex_buffer,
+            points,
         }
     }
 
@@ -448,12 +470,6 @@ impl Renderer {
         self.camera_controller.process_events(event);
 
         false
-    }
-
-    pub fn set_point_uniform(&mut self, point: Vector2<f32>) {
-        self.point_uniform.point[0] = point.x;
-        self.point_uniform.point[1] = point.y;
-        self.point_uniform.point[2] = 0.0;
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -469,15 +485,26 @@ impl Renderer {
         }
     }
 
+    pub fn update_points(&mut self, x: f32, y: f32) {
+        let point = PointVertex {
+            position: [x, y, 0.0],
+        };
+        self.points.push(point);
+
+        self.vertex_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(self.points.as_slice()),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+        println!("point: {:?} ", self.points);
+    }
+
     pub fn update(&mut self) {
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
-        println!("xxx: {:?}", self.point_uniform);
-        self.queue.write_buffer(
-            &self.point_buffer,
-            0,
-            bytemuck::cast_slice(&[self.point_uniform]),
-        );
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
@@ -524,17 +551,18 @@ impl Renderer {
                 }),
             });
 
-            render_pass.set_pipeline(&self.render_pipeline);
-            // render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-            // render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            // render_pass.set_bind_group(2, &self.point_bind_group, &[]);
-            // render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-let mesh = &self.obj_model.meshes[0];
-let material = &self.obj_model.materials[mesh.material];
-render_pass.draw_mesh_instanced(mesh, material, 0..self.instances.len() as u32, &self.camera_bind_group);
+            // render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            // render_pass.set_pipeline(&self.render_pipeline);
+            // render_pass.draw_model_instanced(
+            //     &self.obj_model,
+            //     0..self.instances.len() as u32,
+            //     &self.camera_bind_group,
+            // );
 
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as u32);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_pipeline(&self.point_render_pipeline);
+
+            render_pass.draw(0..self.points.len() as u32, 0..1);
         }
 
         for (id, delta) in &egui_textures_delta.set {
