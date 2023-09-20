@@ -29,17 +29,9 @@ impl App {
             // .with_title(format_title(&None))
             .build(&event_loop)?;
 
-        // try_resize_window(&window);
+        try_resize_window(&window);
 
-        let inner_size = window.inner_size();
-
-        let core = Core::new(
-            &event_loop,
-            &window,
-            inner_size.width as f32,
-            inner_size.height as f32,
-            window.scale_factor() as f32,
-        )?;
+        let core = Core::new(&event_loop, &window, window.scale_factor() as f32)?;
 
         Ok(Self {
             core,

@@ -17,8 +17,6 @@ pub struct Core {
     event_proxy: EventProxyWinit<UserEvent>,
     state: State,
     status: AppStatus,
-    width: f32,
-    height: f32,
     ui: UI,
     pub renderer: Renderer,
 }
@@ -27,8 +25,6 @@ impl Core {
     pub fn new(
         event_loop: &EventLoop<UserEvent>,
         window: &Window,
-        width: f32,
-        height: f32,
         scale_factor: f32,
     ) -> Result<Self> {
         let renderer = pollster::block_on(Renderer::new(window));
@@ -47,8 +43,6 @@ impl Core {
             cursor: Vector2::new(0., 0.),
             renderer,
             state,
-            width,
-            height,
             event_proxy,
             status: initial_status,
             ui,
