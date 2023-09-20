@@ -1,11 +1,5 @@
-use crate::{
-    // about::AboutWindow,
-    core::Core,
-    event::UserEvent,
-    window::WindowExt,
-};
+use crate::{core::Core, event::UserEvent};
 use anyhow::Result;
-use std::collections::HashMap;
 use winit::{
     dpi::{LogicalSize, Size},
     event::{ElementState, Event, KeyboardInput, MouseButton, WindowEvent},
@@ -83,8 +77,6 @@ impl App {
                     ref event,
                     window_id,
                 } if window_id == self.window.id() => {
-                    self.core.handle_window_event(event);
-
                     if !self.core.renderer.input(event) {
                         match event {
                             WindowEvent::CloseRequested => {
@@ -100,16 +92,6 @@ impl App {
                             }
                             WindowEvent::MouseInput { button, state, .. } => {
                                 if window_id == self.window.id() {
-                                    // if *state == ElementState::Released {
-                                    //     let _ = self
-                                    //         .window
-                                    //         .set_cursor_grab(winit::window::CursorGrabMode::None);
-                                    // } else if *state == ElementState::Pressed {
-                                    //     println!("CLICK!!!");
-                                    //     let _ = self
-                                    //         .window
-                                    //         .set_cursor_grab(winit::window::CursorGrabMode::Locked);
-                                    // }
                                     if let MouseButton::Left = button {
                                         self.core
                                             .handle_mouse_input(*state == ElementState::Pressed)
@@ -139,6 +121,7 @@ impl App {
                             _ => {}
                         }
                     }
+                    self.core.handle_window_event(event);
                 }
                 Event::UserEvent(event) => {
                     todo!();

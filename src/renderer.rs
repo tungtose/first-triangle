@@ -101,7 +101,7 @@ pub struct Renderer {
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
 
-    camera: Camera,
+    pub camera: Camera,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -115,6 +115,7 @@ pub struct Renderer {
 pub fn create_render_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
+    primitive_topology: wgpu::PrimitiveTopology,
     color_format: wgpu::TextureFormat,
     depth_format: Option<wgpu::TextureFormat>,
     vertex_layouts: &[wgpu::VertexBufferLayout],
@@ -143,7 +144,7 @@ pub fn create_render_pipeline(
             })],
         }),
         primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::PointList,
+            topology: primitive_topology,
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
             cull_mode: Some(wgpu::Face::Back),
@@ -272,9 +273,8 @@ impl Renderer {
             target: (0.0, 0.0, 0.0).into(),
             up: Vector3::unit_y(),
             aspect: config.width as f32 / config.height as f32,
-
             fovy: 45.0,
-            zfar: 100.0,
+            zfar: 200.0,
             znear: 0.1,
         };
 
@@ -367,6 +367,7 @@ impl Renderer {
             create_render_pipeline(
                 &device,
                 &render_pipeline_layout,
+                wgpu::PrimitiveTopology::TriangleList,
                 config.format,
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[model::ModelVertex::desc(), InstanceRaw::desc()],
@@ -392,6 +393,7 @@ impl Renderer {
             create_render_pipeline(
                 &device,
                 &layout,
+                wgpu::PrimitiveTopology::PointList,
                 config.format,
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[model::PointVertex::desc()],
@@ -483,9 +485,13 @@ impl Renderer {
     }
 
     pub fn update_points(&mut self, x: f32, y: f32) {
+        let ndc_x = (x / self.config.width as f32) * 2.0 - 1.0;
+        let ndc_y = 1.0 - (y / self.config.height as f32) * 2.0;
+
         let point = PointVertex {
-            position: [x, y, 0.0],
+            position: [ndc_x, ndc_y, 0.0],
         };
+
         self.points.push(point);
 
         self.vertex_buffer = self
@@ -496,7 +502,7 @@ impl Renderer {
                 usage: wgpu::BufferUsages::VERTEX,
             });
 
-        println!("point: {:?} ", self.points);
+        // println!("point: {:?} ", self.points);
     }
 
     pub fn update(&mut self) {
@@ -548,13 +554,13 @@ impl Renderer {
                 }),
             });
 
-            // render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            // render_pass.set_pipeline(&self.render_pipeline);
-            // render_pass.draw_model_instanced(
-            //     &self.obj_model,
-            //     0..self.instances.len() as u32,
-            //     &self.camera_bind_group,
-            // );
+            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.draw_model_instanced(
+                &self.obj_model,
+                0..self.instances.len() as u32,
+                &self.camera_bind_group,
+            );
 
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_pipeline(&self.point_render_pipeline);

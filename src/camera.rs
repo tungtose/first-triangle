@@ -29,6 +29,7 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     0.0, 0.0, 0.0, 1.0,
 );
 
+#[derive(Debug)]
 pub struct Camera {
     pub eye: Point3<f32>,
     pub target: Point3<f32>,
@@ -45,7 +46,7 @@ impl Camera {
 
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
 
-        return OPENGL_TO_WGPU_MATRIX * proj * view;
+        OPENGL_TO_WGPU_MATRIX * proj * view
     }
 }
 
@@ -82,7 +83,6 @@ impl CameraController {
                 let is_pressed = *state == ElementState::Pressed;
                 match keycode {
                     VirtualKeyCode::W | VirtualKeyCode::Up => {
-                        println!("uppp");
                         self.is_forward_pressed = is_pressed;
                         true
                     }

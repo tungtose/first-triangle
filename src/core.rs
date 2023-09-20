@@ -43,8 +43,6 @@ impl Core {
         let event_proxy = event_loop.create_proxy();
         let event_proxy = EventProxyWinit::from_proxy(event_proxy);
 
-        // println!("w: {}, h: {}", width, height);
-
         Ok(Self {
             cursor: Vector2::new(0., 0.),
             renderer,
@@ -68,28 +66,32 @@ impl Core {
     }
 
     pub fn update_cursor(&mut self, x: f32, y: f32) {
-        self.cursor.x = (x * 2.0) / self.width - 1.0;
-        self.cursor.y = 1.0 - (y * 2.0) / self.height;
+        self.cursor.x = x;
+        self.cursor.y = y;
     }
 
     pub fn handle_mouse_input(&mut self, pressed: bool) {
         if pressed {
             self.renderer.update_points(self.cursor.x, self.cursor.y);
-            println!("point: {:?}", self.cursor);
         }
     }
 
     pub fn render(&mut self, window: &Window) -> Result<(), wgpu::SurfaceError> {
         // println!("Cursor: {:?}", self.cursor);
 
-        let ui_state = UiState {
+        let mut ui_state = UiState {
             is_paused: false,
             status: self.status.clone(),
         };
 
         let raw_input = self.state.take_egui_input(window);
 
-        let full_output = self.ui.prepare(raw_input, &self.event_proxy, ui_state);
+        let full_output = self.ui.prepare(
+            raw_input,
+            &self.event_proxy,
+            &mut ui_state,
+            &mut self.renderer.camera,
+        );
 
         self.state
             .handle_platform_output(window, self.ui.context(), full_output.platform_output);

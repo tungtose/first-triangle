@@ -1,6 +1,8 @@
-use egui::{Button, Context, FontDefinitions, FullOutput, RawInput, TopBottomPanel};
+use cgmath::{Point3, Vector3};
+use egui::{Button, Context, FontDefinitions, FullOutput, RawInput, TopBottomPanel, Vec2};
 
 use crate::{
+    camera::Camera,
     event::{AppStatus, EventProxy, UserEvent},
     shortcut::Shortcut,
 };
@@ -30,14 +32,21 @@ impl UI {
         &mut self,
         raw_input: RawInput,
         event_proxy: &impl EventProxy<UserEvent>,
-        state: UiState,
+        state: &mut UiState,
+        camera: &mut Camera,
     ) -> FullOutput {
         self.context.run(raw_input, |ctx| {
-            self.ui(ctx, event_proxy, state);
+            self.ui(ctx, event_proxy, state, camera);
         })
     }
 
-    fn ui(&self, ctx: &Context, event_proxy: &impl EventProxy<UserEvent>, state: UiState) {
+    fn ui(
+        &self,
+        ctx: &Context,
+        event_proxy: &impl EventProxy<UserEvent>,
+        state: &mut UiState,
+        camera: &mut Camera,
+    ) {
         if ctx.input_mut(|i| i.consume_shortcut(&self.shortcut.app_quit)) {
             event_proxy.send_event(UserEvent::Quit);
         }
@@ -58,19 +67,99 @@ impl UI {
             event_proxy.send_event(UserEvent::SaveFileAs);
         }
 
-        egui::containers::Window::new("Window")
+        egui::containers::Window::new("Debuger")
             .default_open(true)
             .show(ctx, |ui| {
-                egui::CollapsingHeader::new("Loader").show(ui, |ui| {
-                    if ui.button("Load glTF").clicked() {
-                        println!("Hello!!!!!");
-                    }
+                egui::CollapsingHeader::new("Camera").show(ui, |ui| {
+                    egui::Grid::new("debug_camera_grid")
+                        .num_columns(2)
+                        .spacing([10.0, 4.0])
+                        .striped(true)
+                        .show(ui, |ui| {
+                            ui.label("Eye:");
+                            camera.eye.render_xyz(ui, "eye");
+                            ui.end_row();
+
+                            ui.label("Target:");
+                            camera.target.render_xyz(ui, "target");
+                            ui.end_row();
+
+                            ui.label("Up:");
+                            camera.up.render_xyz(ui, "up");
+                            ui.end_row();
+
+                            ui.label("Aspect:");
+                            ui.add(egui::TextEdit::singleline(&mut camera.aspect.to_string()));
+                            ui.end_row();
+
+                            ui.label("Fovy:");
+                            ui.add(egui::TextEdit::singleline(&mut camera.fovy.to_string()));
+                            ui.end_row();
+
+                            ui.label("Z Near:");
+                            ui.add(egui::TextEdit::singleline(&mut camera.znear.to_string()));
+                            ui.end_row();
+
+                            ui.label("Z Far:");
+                            ui.add(egui::TextEdit::singleline(&mut camera.zfar.to_string()));
+                            ui.end_row();
+                        })
                 });
-                ui.add(egui::Hyperlink::from_label_and_url(
-                    "Link...",
-                    "https://github.com/tungtose",
-                ));
             });
+    }
+}
+
+struct Xyz<T> {
+    x: T,
+    y: T,
+    z: T,
+}
+
+trait XYZContent {
+    const MIN_RECT: Vec2 = Vec2::new(40., 15.);
+    fn xyz(&self) -> Xyz<f32>;
+    fn render_xyz(&self, ui: &mut egui::Ui, label: &str) {
+        egui::Grid::new(label)
+            .num_columns(3)
+            .min_col_width(3.)
+            .spacing([10., 10.])
+            .show(ui, |ui| {
+                ui.label("x");
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.xyz().x.to_string())
+                        .min_size(Self::MIN_RECT),
+                );
+                ui.label("y");
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.xyz().y.to_string())
+                        .min_size(Self::MIN_RECT),
+                );
+                ui.label("z");
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.xyz().z.to_string())
+                        .min_size(Self::MIN_RECT),
+                );
+            });
+    }
+}
+
+impl XYZContent for Point3<f32> {
+    fn xyz(&self) -> Xyz<f32> {
+        Xyz {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+        }
+    }
+}
+
+impl XYZContent for Vector3<f32> {
+    fn xyz(&self) -> Xyz<f32> {
+        Xyz {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+        }
     }
 }
 
