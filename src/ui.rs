@@ -1,9 +1,10 @@
-use cgmath::{Point3, Vector3};
+use cgmath::{Point3, Vector2, Vector3};
 use egui::{Button, Context, FontDefinitions, FullOutput, RawInput, TopBottomPanel, Vec2};
 
 use crate::{
     camera::Camera,
     event::{AppStatus, EventProxy, UserEvent},
+    mouse::Mouse,
     shortcut::Shortcut,
 };
 
@@ -34,9 +35,10 @@ impl UI {
         event_proxy: &impl EventProxy<UserEvent>,
         state: &mut UiState,
         camera: &mut Camera,
+        mouse: &mut Mouse,
     ) -> FullOutput {
         self.context.run(raw_input, |ctx| {
-            self.ui(ctx, event_proxy, state, camera);
+            self.ui(ctx, event_proxy, state, camera, mouse);
         })
     }
 
@@ -46,6 +48,7 @@ impl UI {
         event_proxy: &impl EventProxy<UserEvent>,
         state: &mut UiState,
         camera: &mut Camera,
+        mouse: &mut Mouse,
     ) {
         if ctx.input_mut(|i| i.consume_shortcut(&self.shortcut.app_quit)) {
             event_proxy.send_event(UserEvent::Quit);
@@ -105,6 +108,29 @@ impl UI {
                             ui.end_row();
                         })
                 });
+                egui::CollapsingHeader::new("Mouse").show(ui, |ui| {
+                    egui::Grid::new("debug_mouse_grid")
+                        .num_columns(2)
+                        .spacing([10.0, 4.0])
+                        .striped(true)
+                        .show(ui, |ui| {
+                            ui.label("viewport:");
+                            mouse.pos_viewport().render_xy(ui, "mouse_viewport");
+                            ui.end_row();
+
+                            ui.label("Ndc:");
+                            mouse.pos_ndc().render_xy(ui, "mouse_ndc");
+                            ui.end_row();
+
+                            ui.label("Pressed:");
+                            ui.checkbox(&mut mouse.pressed(), "");
+                            ui.end_row();
+
+                            ui.label("Released:");
+                            ui.checkbox(&mut mouse.released(), "");
+                            ui.end_row();
+                        })
+                });
             });
     }
 }
@@ -113,6 +139,34 @@ struct Xyz<T> {
     x: T,
     y: T,
     z: T,
+}
+
+struct Xy<T> {
+    x: T,
+    y: T,
+}
+
+trait XYContent {
+    const MIN_RECT: Vec2 = Vec2::new(40., 15.);
+    fn xy(&self) -> Xy<f32>;
+    fn render_xy(&self, ui: &mut egui::Ui, label: &str) {
+        egui::Grid::new(label)
+            .num_columns(3)
+            .min_col_width(5.)
+            .spacing([5., 10.])
+            .show(ui, |ui| {
+                ui.label("x");
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.xy().x.to_string())
+                        .min_size(Self::MIN_RECT),
+                );
+                ui.label("y");
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.xy().y.to_string())
+                        .min_size(Self::MIN_RECT),
+                );
+            });
+    }
 }
 
 trait XYZContent {
@@ -140,6 +194,15 @@ trait XYZContent {
                         .min_size(Self::MIN_RECT),
                 );
             });
+    }
+}
+
+impl XYContent for Vector2<f32> {
+    fn xy(&self) -> Xy<f32> {
+        Xy {
+            x: self.x,
+            y: self.y,
+        }
     }
 }
 

@@ -12,6 +12,7 @@ use bytemuck::{Pod, Zeroable};
 use crate::model;
 use crate::model::PointVertex;
 use crate::model::{DrawModel, Vertex};
+use crate::mouse::Mouse;
 use crate::{
     camera::{Camera, CameraController, CameraUniform},
     texture,
@@ -102,6 +103,7 @@ pub struct Renderer {
     instance_buffer: wgpu::Buffer,
 
     pub camera: Camera,
+    mouse: Mouse,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -182,6 +184,11 @@ impl Renderer {
 
         let surface = unsafe { instance.create_surface(window) }.unwrap();
 
+        let mouse = Mouse::new(
+            window.inner_size().width as f32,
+            window.inner_size().height as f32,
+        );
+
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
@@ -221,8 +228,6 @@ impl Renderer {
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
         };
-
-        // let egui = egui_wgpu::renderer::Renderer::new(&device, config.format, None, 1);
 
         surface.configure(&device, &config);
 
@@ -274,7 +279,7 @@ impl Renderer {
             up: Vector3::unit_y(),
             aspect: config.width as f32 / config.height as f32,
             fovy: 45.0,
-            zfar: 200.0,
+            zfar: 100.0,
             znear: 0.1,
         };
 
@@ -462,11 +467,13 @@ impl Renderer {
             obj_model,
             vertex_buffer,
             points,
+            mouse,
         }
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
         self.camera_controller.process_events(event);
+        self.mouse.process_events(event);
 
         false
     }
@@ -484,28 +491,31 @@ impl Renderer {
         }
     }
 
-    pub fn update_points(&mut self, x: f32, y: f32) {
-        let ndc_x = (x / self.config.width as f32) * 2.0 - 1.0;
-        let ndc_y = 1.0 - (y / self.config.height as f32) * 2.0;
+    pub fn mouse(&self) -> Mouse {
+        self.mouse
+    }
 
-        let point = PointVertex {
-            position: [ndc_x, ndc_y, 0.0],
-        };
-
-        self.points.push(point);
-
-        self.vertex_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(self.points.as_slice()),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-
-        // println!("point: {:?} ", self.points);
+    pub fn camera(&self) -> Camera {
+        self.camera
     }
 
     pub fn update(&mut self) {
+        // FIXME !!!
+        if self.mouse.pressed() && !self.mouse.released() {
+            let point = PointVertex {
+                position: [self.mouse.pos_ndc().x, self.mouse.pos_ndc().y, 0.0],
+            };
+            self.points.push(point);
+
+            self.vertex_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Vertex Buffer"),
+                        contents: bytemuck::cast_slice(self.points.as_slice()),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+        }
+
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
         self.queue.write_buffer(

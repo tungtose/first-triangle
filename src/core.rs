@@ -1,10 +1,10 @@
 use crate::{
     event::{AppStatus, EventProxyWinit, UserEvent},
+    mouse::Mouse,
     renderer::Renderer,
     ui::{UiState, UI},
 };
 
-use cgmath::Vector2;
 use egui::ClippedPrimitive;
 use egui_wgpu::renderer::ScreenDescriptor;
 use egui_winit::State;
@@ -13,12 +13,12 @@ use anyhow::{Ok, Result};
 use winit::{event::WindowEvent, event_loop::EventLoop, window::Window};
 
 pub struct Core {
-    cursor: Vector2<f32>,
     event_proxy: EventProxyWinit<UserEvent>,
     state: State,
     status: AppStatus,
     ui: UI,
     pub renderer: Renderer,
+    // mouse: Mouse,
 }
 
 impl Core {
@@ -28,6 +28,11 @@ impl Core {
         scale_factor: f32,
     ) -> Result<Self> {
         let renderer = pollster::block_on(Renderer::new(window));
+
+        // let mouse = Mouse::new(
+        //     window.inner_size().width as f32,
+        //     window.inner_size().height as f32,
+        // );
 
         let ui = UI::new();
 
@@ -40,12 +45,12 @@ impl Core {
         let event_proxy = EventProxyWinit::from_proxy(event_proxy);
 
         Ok(Self {
-            cursor: Vector2::new(0., 0.),
             renderer,
             state,
             event_proxy,
             status: initial_status,
             ui,
+            // mouse,
         })
     }
 
@@ -59,20 +64,11 @@ impl Core {
         self.state.on_event(self.ui.context(), event).repaint
     }
 
-    pub fn update_cursor(&mut self, x: f32, y: f32) {
-        self.cursor.x = x;
-        self.cursor.y = y;
-    }
-
-    pub fn handle_mouse_input(&mut self, pressed: bool) {
-        if pressed {
-            self.renderer.update_points(self.cursor.x, self.cursor.y);
-        }
+    pub fn handle_mouse_input(&mut self, event: &WindowEvent) {
+        // self.mouse.process_events(event);
     }
 
     pub fn render(&mut self, window: &Window) -> Result<(), wgpu::SurfaceError> {
-        // println!("Cursor: {:?}", self.cursor);
-
         let mut ui_state = UiState {
             is_paused: false,
             status: self.status.clone(),
@@ -84,7 +80,8 @@ impl Core {
             raw_input,
             &self.event_proxy,
             &mut ui_state,
-            &mut self.renderer.camera,
+            &mut self.renderer.camera(),
+            &mut self.renderer.mouse(),
         );
 
         self.state

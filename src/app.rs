@@ -69,25 +69,12 @@ impl App {
                     ref event,
                     window_id,
                 } if window_id == self.window.id() => {
+                    // self.core.handle_mouse_input(event);
                     if !self.core.renderer.input(event) {
                         match event {
                             WindowEvent::CloseRequested => {
                                 if window_id == self.window.id() {
                                     *control_flow = ControlFlow::Exit;
-                                }
-                            }
-                            WindowEvent::CursorMoved { position, .. } => {
-                                if window_id == self.window.id() {
-                                    self.core
-                                        .update_cursor(position.x as f32, position.y as f32)
-                                }
-                            }
-                            WindowEvent::MouseInput { button, state, .. } => {
-                                if window_id == self.window.id() {
-                                    if let MouseButton::Left = button {
-                                        self.core
-                                            .handle_mouse_input(*state == ElementState::Pressed)
-                                    }
                                 }
                             }
                             WindowEvent::Resized(physical_size) => {

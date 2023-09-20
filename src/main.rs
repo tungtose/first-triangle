@@ -4,6 +4,7 @@ mod core;
 pub mod egui_context;
 mod event;
 mod model;
+mod mouse;
 mod renderer;
 mod resources;
 mod shortcut;
