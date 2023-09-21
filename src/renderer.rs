@@ -296,7 +296,7 @@ impl Renderer {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -353,25 +353,21 @@ impl Renderer {
         let depth_texture =
             texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[
-                    &texture_bind_group_layout,
-                    &camera_bind_group_layout,
-                    // &light_bind_group_layout,
-                ],
-                label: Some("render_pipeline_layout"),
-                push_constant_ranges: &[],
-            });
-
         let render_pipeline = {
             let shader = wgpu::ShaderModuleDescriptor {
                 label: Some("Normal Shader"),
                 source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
             };
+
+            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
+                label: Some("render_pipeline_layout"),
+                push_constant_ranges: &[],
+            });
+
             create_render_pipeline(
                 &device,
-                &render_pipeline_layout,
+                &layout,
                 wgpu::PrimitiveTopology::TriangleList,
                 config.format,
                 Some(texture::Texture::DEPTH_FORMAT),
@@ -387,11 +383,8 @@ impl Renderer {
             };
 
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[
-                    // &camera_bind_group_layout,
-                    // &light_bind_group_layout,
-                ],
-                label: Some("point_render_pipeline_layout"),
+                label: Some("Point Pipeline Layout"),
+                bind_group_layouts: &[&camera_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -572,8 +565,9 @@ impl Renderer {
                 &self.camera_bind_group,
             );
 
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_pipeline(&self.point_render_pipeline);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
 
             render_pass.draw(0..self.points.len() as u32, 0..1);
         }

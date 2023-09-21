@@ -21,6 +21,7 @@ wgpu = "0.16.0"
 winit = "0.28.0"
 tobj = { version = "4.0.0", features = ["async"] }
 cfg-if = "1.0.0"
+lyon = { version = "1.0.1", features = ["extra"] }
 
 [build-dependencies]
 anyhow = "1.0"
